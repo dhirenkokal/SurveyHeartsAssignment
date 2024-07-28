@@ -34,11 +34,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        recyclerView = findViewById(R.id.recycler_view)
-        progressBar = findViewById(R.id.progress_bar)
-        todoAdapter = TodoAdapter(todos, ::deleteTodo, ::updateTodo)
-        recyclerView.adapter = todoAdapter
-        recyclerView.layoutManager = LinearLayoutManager(this)
+        initViews()
+        setupRecyclerView()
 
         findViewById<FloatingActionButton>(R.id.add_task_button).setOnClickListener {
             showAddTaskDialog()
@@ -47,8 +44,19 @@ class MainActivity : AppCompatActivity() {
         if (isInternetAvailable()) {
             fetchTodos()
         } else {
-            Toast.makeText(this, "No internet connection", Toast.LENGTH_SHORT).show()
+            showToast("No internet connection")
         }
+    }
+
+    private fun initViews() {
+        recyclerView = findViewById(R.id.recycler_view)
+        progressBar = findViewById(R.id.progress_bar)
+    }
+
+    private fun setupRecyclerView() {
+        todoAdapter = TodoAdapter(todos, ::deleteTodo, ::updateTodo)
+        recyclerView.adapter = todoAdapter
+        recyclerView.layoutManager = LinearLayoutManager(this)
     }
 
     private fun showAddTaskDialog() {
@@ -67,7 +75,7 @@ class MainActivity : AppCompatActivity() {
                 addTask(taskText)
                 dialog.dismiss()
             } else {
-                Toast.makeText(this, "Task cannot be empty", Toast.LENGTH_SHORT).show()
+                showToast("Task cannot be empty")
             }
         }
 
@@ -85,20 +93,22 @@ class MainActivity : AppCompatActivity() {
                 )
                 val response = RetrofitInstance.api.addTodo(newTodo)
                 withContext(Dispatchers.Main) {
-                    if (response.isSuccessful) {
-                        response.body()?.let {
-                            todos.add(it)
-                            todoAdapter.notifyItemInserted(todos.size - 1)
-                        }
-                    } else {
-                        Toast.makeText(this@MainActivity, "Error adding task", Toast.LENGTH_SHORT).show()
-                    }
+                    handleAddTaskResponse(response.body(), response.isSuccessful)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Error adding task: ${e.message}", Toast.LENGTH_SHORT).show()
+                    showToast("Error adding task: ${e.message}")
                 }
             }
+        }
+    }
+
+    private fun handleAddTaskResponse(newTodo: Todo?, isSuccessful: Boolean) {
+        if (isSuccessful && newTodo != null) {
+            todos.add(newTodo)
+            todoAdapter.notifyItemInserted(todos.size - 1)
+        } else {
+            showToast("Error adding task")
         }
     }
 
@@ -108,18 +118,22 @@ class MainActivity : AppCompatActivity() {
             try {
                 val response = RetrofitInstance.api.getTodos(limit = 30, skip = 0)
                 withContext(Dispatchers.Main) {
-                    todos.clear()
-                    todos.addAll(response.todos)
-                    todoAdapter.notifyDataSetChanged()
-                    hideProgressBar()
+                    handleFetchTodosResponse(response.todos)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     hideProgressBar()
-                    Toast.makeText(this@MainActivity, "Error fetching todos", Toast.LENGTH_SHORT).show()
+                    showToast("Error fetching todos")
                 }
             }
         }
+    }
+
+    private fun handleFetchTodosResponse(fetchedTodos: List<Todo>) {
+        todos.clear()
+        todos.addAll(fetchedTodos)
+        todoAdapter.notifyDataSetChanged()
+        hideProgressBar()
     }
 
     private fun deleteTodo(todo: Todo) {
@@ -132,7 +146,7 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Error deleting todo", Toast.LENGTH_SHORT).show()
+                    showToast("Error deleting todo")
                 }
             }
         }
@@ -144,17 +158,21 @@ class MainActivity : AppCompatActivity() {
                 val updatedTodo = todo.copy(completed = isChecked)
                 RetrofitInstance.api.updateTodo(todo.id, updatedTodo)
                 withContext(Dispatchers.Main) {
-                    val index = todos.indexOf(todo)
-                    if (index != -1) {
-                        todos[index] = updatedTodo
-                        todoAdapter.notifyItemChanged(index)
-                    }
+                    handleUpdateTodoResponse(todo, updatedTodo)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Error updating todo", Toast.LENGTH_SHORT).show()
+                    showToast("Error updating todo")
                 }
             }
+        }
+    }
+
+    private fun handleUpdateTodoResponse(todo: Todo, updatedTodo: Todo) {
+        val index = todos.indexOf(todo)
+        if (index != -1) {
+            todos[index] = updatedTodo
+            todoAdapter.notifyItemChanged(index)
         }
     }
 
@@ -164,6 +182,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun hideProgressBar() {
         progressBar.visibility = View.GONE
+    }
+
+    private fun showToast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
     private fun isInternetAvailable(): Boolean {
